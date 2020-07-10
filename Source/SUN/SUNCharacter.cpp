@@ -57,8 +57,14 @@ ASUNCharacter::ASUNCharacter()
 	// Default offset from the character location for projectiles to spawn
 	GunOffset = FVector(100.0f, 0.0f, 10.0f);
 
-	// Note: The ProjectileClass and the skeletal mesh/anim blueprints for Mesh1P, FP_Gun, and VR_Gun 
-	// are set in the derived blueprint asset named MyCharacter to avoid direct content references in C++.
+	TriggerCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Trigger Capsule"));
+	TriggerCapsule->InitCapsuleSize(55.5, 96.f);
+	TriggerCapsule->SetCollisionProfileName(TEXT("Trigger"));
+	TriggerCapsule->SetupAttachment(RootComponent);
+
+	TriggerCapsule ->OnComponentBeginOverlap.AddDynamic(this, &ASUNCharacter::OnOverlapBegin);
+	TriggerCapsule ->OnComponentEndOverlap.AddDynamic(this, &ASUNCharacter::OnOverlapEnd);
+
 }
 
 void ASUNCharacter::BeginPlay()
@@ -79,9 +85,6 @@ void ASUNCharacter::BeginPlay()
 	
 
 }
-
-//////////////////////////////////////////////////////////////////////////
-// Input
 
 void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
@@ -192,9 +195,18 @@ void ASUNCharacter::StopDash()
 
 void ASUNCharacter::WallRun()
 {
-	
+
 }
 
+void ASUNCharacter::OnOverlapBegin(class UPrimitiveComponent* newComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+
+}
+
+void ASUNCharacter::OnOverlapEnd(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	
+}
 void ASUNCharacter::MoveForward(float Value)
 {
 	if (Value != 0.0f)
@@ -224,4 +236,5 @@ void ASUNCharacter::LookUpAtRate(float Rate)
 	// calculate delta for this frame from the rate information
 	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
 }
+
 
