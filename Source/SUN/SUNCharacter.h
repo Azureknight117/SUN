@@ -4,9 +4,22 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "TimerManager.h"
 #include "SUNCharacter.generated.h"
 
 class UInputComponent;
+UENUM()
+enum WallRunSide
+{
+	Left,
+	Right
+};
+
+enum WallRunEndReason
+{
+	FallOffWall,
+	JumpedOffWall
+};
 
 UCLASS(config=Game)
 class ASUNCharacter : public ACharacter
@@ -36,33 +49,30 @@ protected:
 	virtual void BeginPlay();
 
 public:
-	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Camera)
 	float BaseTurnRate;
 
-	/** Base look up/down rate, in deg/sec. Other scaling may affect final rate. */
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Camera)
 	float BaseLookUpRate;
 
-	/** Gun muzzle's offset from the characters location */
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Gameplay)
 	FVector GunOffset;
 
-	/** Projectile class to spawn */
+
 	UPROPERTY(EditDefaultsOnly, Category=Projectile)
 	TSubclassOf<class ASUNProjectile> ProjectileClass;
 
-	/** Sound to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Gameplay)
 	class USoundBase* FireSound;
 
-	/** AnimMontage to play each time we fire */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	class UAnimMontage* FireAnimation;
 protected:
 	
 	/** Fires a projectile. */
-	void OnFire();
 
 	void StartFire();
 	void EndFire();
@@ -73,36 +83,46 @@ protected:
 	UPROPERTY(EditAnywhere)
 	float WeaponFireRate = .25f;
 
-	/** Handles moving forward/backward */
 	void MoveForward(float Val);
 
-	/** Handles stafing movement, left and right */
 	void MoveRight(float Val);
 
-	/**
-	 * Called via input to turn at a given rate.
-	 * @param Rate	This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
-	 */
 	void TurnAtRate(float Rate);
 
-	/**
-	 * Called via input to turn look up/down at a given rate.
-	 * @param Rate	This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
-	 */
 	void LookUpAtRate(float Rate);
 
-	
 protected:
-	// APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	// End of APawn interface
 
 
 public:
-	/** Returns Mesh1P subobject **/
 	FORCEINLINE class USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
-	/** Returns FirstPersonCameraComponent subobject **/
+
 	FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement")
+	bool CanJumpInAir;
+	int  NumJumps;
+	int  MaxJumps;
+	void DoubleJump();
+	virtual void Landed(const FHitResult& Hit) override;
+	UPROPERTY(EditDefaultsOnly, Category = "Movement")
+	float JumpHeight = 500.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Movement")
+	bool CanWallRun;
+	bool IsWallRunning;
+	FVector WallRunDirection;
+
+	void WallRun();
+
+	void Dash();
+	UPROPERTY(EditDefaultsOnly, Category = "Movement")
+	bool CanDash;
+	UPROPERTY(EditDefaultsOnly, Category = "Movement")
+	float DashAmount = 10;
+	FTimerHandle DashTimer;
+	void StopDash();
 
 };
 

@@ -9,6 +9,8 @@
 #include "GameFramework/InputSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "TimerManager.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
@@ -66,6 +68,15 @@ void ASUNCharacter::BeginPlay()
 
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	FP_Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
+	if(CanJumpInAir)
+	{
+		MaxJumps = 2;
+	}
+	else
+	{
+		MaxJumps = 1;
+	}
+	
 
 }
 
@@ -78,8 +89,8 @@ void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 	check(PlayerInputComponent);
 
 	// Bind jump events
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
-	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASUNCharacter::DoubleJump);
+	PlayerInputComponent->BindAction("Dash", IE_Pressed, this, &ASUNCharacter::Dash);
 
 	// Bind fire event
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ASUNCharacter::StartFire);
@@ -90,38 +101,10 @@ void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASUNCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ASUNCharacter::MoveRight);
 
-	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
-	// "turn" handles devices that provide an absolute delta, such as a mouse.
-	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
 	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 	PlayerInputComponent->BindAxis("TurnRate", this, &ASUNCharacter::TurnAtRate);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &ASUNCharacter::LookUpAtRate);
-}
-
-void ASUNCharacter::OnFire()
-{
-	// try and fire a projectile
-	if (ProjectileClass != NULL)
-	{
-		UWorld* const World = GetWorld();
-		if (World != NULL)
-		{		
-				const FRotator SpawnRotation = GetControlRotation();
-				// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
-				const FVector SpawnLocation = ((FP_MuzzleLocation != nullptr) ? FP_MuzzleLocation->GetComponentLocation() : GetActorLocation()) + SpawnRotation.RotateVector(GunOffset);
-
-				//Set Spawn Collision Handling Override
-				FActorSpawnParameters ActorSpawnParams;
-				ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-
-				// spawn the projectile at the muzzle
-				World->SpawnActor<ASUNProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
-			
-		}
-	}
-
-	
 }
 
 void ASUNCharacter::StartFire()
@@ -169,6 +152,48 @@ void ASUNCharacter::EndFire()
 	GetWorldTimerManager().ClearTimer(ShotTimer);
 }
 
+void ASUNCharacter::DoubleJump()
+{
+	if(NumJumps < MaxJumps)
+	{
+		ACharacter::LaunchCharacter(FVector(0,0,JumpHeight), false, true);
+		NumJumps++;
+	}
+}
+
+void ASUNCharacter::Landed(const FHitResult & Hit)
+{
+	NumJumps = 0;;
+}
+
+void ASUNCharacter::Dash()
+{
+	if(CanDash)
+	{
+		FVector DashDirection = GetVelocity();
+		DashDirection.Z = 0;
+		GetCharacterMovement()->GroundFriction = 0.f;
+		ACharacter::LaunchCharacter((DashDirection) * DashAmount, true, true);
+		GetWorldTimerManager().SetTimer(DashTimer, this, &ASUNCharacter::StopDash, .25f, false);
+
+		// try and play the sound if specified
+		if (FireSound != NULL)
+		{
+			UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
+		}
+	}
+}
+
+void ASUNCharacter::StopDash()
+{
+	GetCharacterMovement()->GroundFriction = 8;
+	GetCharacterMovement()->StopMovementImmediately();
+}
+
+void ASUNCharacter::WallRun()
+{
+	
+}
 
 void ASUNCharacter::MoveForward(float Value)
 {
