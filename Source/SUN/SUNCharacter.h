@@ -43,7 +43,7 @@ class ASUNCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* FirstPersonCameraComponent;
 
-	UPROPERTY(VisibleAnywhere, Category = "Trigger Capsule")
+	UPROPERTY(EditAnywhere, Category = "Trigger Capsule")
 	class UCapsuleComponent* TriggerCapsule;
 
 
@@ -79,9 +79,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	class UAnimMontage* FireAnimation;
 
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable)
 	void OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
-	
+
 	
 protected:
 	
@@ -127,16 +127,18 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float JumpHeight = 500.f;
+	void ResetJumps(int Jumps);
 
 	//Wall run
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	bool CanWallRun;
 	bool IsWallRunning;
 	FVector WallRunDirection;
+	FTimerHandle WallRunTimer;
 	EWallRunSide WallRunSide;
 	void WallRun();
 	void BeginWallRun();
-	void EndWallRun();
+	void EndWallRun(EWallRunEndReason Reason);
 	void TiltCamera();
 	bool OnWall();
 	bool MovingForward();

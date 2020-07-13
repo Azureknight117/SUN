@@ -65,9 +65,6 @@ ASUNCharacter::ASUNCharacter()
 	TriggerCapsule->SetCollisionProfileName(TEXT("Trigger"));
 	TriggerCapsule->SetupAttachment(RootComponent);
 
-	TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
-
-
 }
 
 void ASUNCharacter::BeginPlay()
@@ -85,13 +82,12 @@ void ASUNCharacter::BeginPlay()
 	{
 		MaxJumps = 1;
 	}
+	TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
 }
 
 void ASUNCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-
 }
 
 void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
@@ -207,12 +203,23 @@ void ASUNCharacter::DoubleJump()
 			NumJumps++;
 			if(isFalling) NumJumps++;
 		}
+		else
+		{
+			EndWallRun(JumpedOffWall);
+			ACharacter::LaunchCharacter(FVector(0,0,JumpHeight), false, true);
+			NumJumps++;
+		}
 	}
+}
+
+void ASUNCharacter::ResetJumps(int Jumps)
+{
+	NumJumps = Jumps;
 }
 
 void ASUNCharacter::Landed(const FHitResult & Hit)
 {
-	NumJumps = 0;;
+	ResetJumps(0);
 }
 
 void ASUNCharacter::Dash()
@@ -224,7 +231,7 @@ void ASUNCharacter::Dash()
 		GetCharacterMovement()->GroundFriction = 0.f;
 		ACharacter::LaunchCharacter((DashDirection) * DashAmount, true, true);
 		GetWorldTimerManager().SetTimer(DashTimer, this, &ASUNCharacter::StopDash, .25f, false);
-
+		if(IsWallRunning)EndWallRun(JumpedOffWall);
 		// try and play the sound if specified
 		if (FireSound != NULL)
 		{
@@ -239,8 +246,6 @@ void ASUNCharacter::StopDash()
 	GetCharacterMovement()->StopMovementImmediately();
 }
 
-
-UFUNCTION()
 void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	if(!IsWallRunning)
@@ -250,10 +255,11 @@ void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 			if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
 			{
 				FindDirectionAndSide(Hit.ImpactNormal);
-				if(ForwardAxis > 0.1f)
-				{
+				//if(ForwardAxis > 0.1f)
+				//{
 
-				}
+					BeginWallRun();
+				//}
 			}
 		}
 	}
@@ -262,16 +268,69 @@ void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 
 void ASUNCharacter::WallRun()
 {
+	FVector WallSide;
+	FHitResult Hit;
+	if(ForwardAxis < 0.1f)
+	{
+		EndWallRun(FallOffWall);
+		return;
+	}
+
+	switch(WallRunSide)
+	{
+		case Left:
+			WallSide = FVector(0,0,-1);
+			break;
+		case Right:
+			WallSide = FVector(0,0,1);
+			break;
+	}
+
+	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 200) ;
+	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WallTrace),false,this);
+	EWallRunSide PrevSide;
+	DrawDebugLine(GetWorld(), GetActorLocation(),(GetActorLocation() + ToWall), FColor::Purple, false, 1, 0, 1);
+	if(GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(),(GetActorLocation() + ToWall), ECC_Visibility,QueryParams))
+	{
+		PrevSide = WallRunSide;
+		FindDirectionAndSide(Hit.ImpactNormal);
+		if(PrevSide != WallRunSide)
+		{
+			EndWallRun(FallOffWall);
+			return;
+		}
+		else
+		{
+			FVector WallRunVelocity = WallRunDirection * GetCharacterMovement()->GetMaxSpeed();
+			GetCharacterMovement()->Velocity = FVector(WallRunVelocity.X ,WallRunVelocity.Y, 0);
+		}
+	}
+	else
+	{
+		EndWallRun(FallOffWall);
+		return;
+	}
 
 }
 
 void ASUNCharacter::BeginWallRun()
 {
-
+	GetCharacterMovement()->AirControl = 1.0f;
+	GetCharacterMovement()->GravityScale = 0;
+	GetCharacterMovement()->SetPlaneConstraintNormal(FVector(0,0,1));
+	IsWallRunning = true;
+	TiltCamera();
+	GetWorldTimerManager().SetTimer(WallRunTimer, this, &ASUNCharacter::WallRun, .01f, true);
 }
-void ASUNCharacter::EndWallRun()
-{
 
+void ASUNCharacter::EndWallRun(EWallRunEndReason Reason)
+{
+	GetWorldTimerManager().ClearTimer(WallRunTimer);
+	GetCharacterMovement()->AirControl = 0.5f;
+	GetCharacterMovement()->GravityScale = 0.9f;
+	GetCharacterMovement()->SetPlaneConstraintNormal(FVector(0,0,0));
+	IsWallRunning = false;
+	TiltCamera();
 }
 
 
@@ -292,32 +351,36 @@ void ASUNCharacter::TiltCamera()
 
 void ASUNCharacter::FindDirectionAndSide(FVector WallNormal) 
 {
-	float DotProduct = FVector::DotProduct(WallNormal, GetActorRightVector());
+	FVector2D WallNorm = FVector2D(WallNormal.X, WallNormal.Y);
+	FVector2D ActorRight = FVector2D(GetActorRightVector().X, GetActorRightVector().Y);
+	float DotProduct = FVector2D::DotProduct(WallNorm, ActorRight);
 	FVector Direction;
 	if(DotProduct > 0)
 	{
 		WallRunSide = Right;
 		Direction = FVector(0,0,1);
+		WallRunDirection = FVector::CrossProduct(WallNormal,Direction);
 	}
 	else
 	{
 		WallRunSide = Left;
 		Direction = FVector(0,0,-1);
+		WallRunDirection = FVector::CrossProduct(WallNormal,Direction);
 	}
-	WallRunDirection = FVector::CrossProduct(WallNormal,Direction);
 }
 bool ASUNCharacter::CanSurfaceBeRan(FVector SurfaceNormal) const
 {
-    if(SurfaceNormal.Z < -.05)
+    if(SurfaceNormal.Z < 0)
+	{
+		return false;
+	}
+	else
 	{
 		FVector Surface = FVector (SurfaceNormal.X, SurfaceNormal.Y, 0);
-		Surface.GetSafeNormal();
-		Surface.Normalize();
-		if(UKismetMathLibrary::DegAcos(FVector::DotProduct(Surface, SurfaceNormal)) < GetCharacterMovement()->GetWalkableFloorAngle())
+		if(UKismetMathLibrary::DegAcos(FVector::DotProduct(Surface.GetSafeNormal(), SurfaceNormal)) < GetCharacterMovement()->GetWalkableFloorAngle())
 		{
-			return false;
+			return true;
 		}
-		return true;
 	}
 	return false;
 }
