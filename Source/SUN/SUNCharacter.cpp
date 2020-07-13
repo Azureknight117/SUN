@@ -11,6 +11,9 @@
 #include "DrawDebugHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
+#include "Components/ActorComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Math/Vector.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
@@ -62,8 +65,8 @@ ASUNCharacter::ASUNCharacter()
 	TriggerCapsule->SetCollisionProfileName(TEXT("Trigger"));
 	TriggerCapsule->SetupAttachment(RootComponent);
 
-	TriggerCapsule ->OnComponentBeginOverlap.AddDynamic(this, &ASUNCharacter::OnOverlapBegin);
-	TriggerCapsule ->OnComponentEndOverlap.AddDynamic(this, &ASUNCharacter::OnOverlapEnd);
+	TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
+
 
 }
 
@@ -82,7 +85,12 @@ void ASUNCharacter::BeginPlay()
 	{
 		MaxJumps = 1;
 	}
-	
+}
+
+void ASUNCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
 
 }
 
@@ -108,6 +116,39 @@ void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 	PlayerInputComponent->BindAxis("TurnRate", this, &ASUNCharacter::TurnAtRate);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &ASUNCharacter::LookUpAtRate);
+}
+
+void ASUNCharacter::MoveForward(float Value)
+{
+	if (Value != 0.0f)
+	{
+		// add movement in that direction
+		ForwardAxis = Value;
+		AddMovementInput(GetActorForwardVector(), Value);
+	}
+}
+
+void ASUNCharacter::MoveRight(float Value)
+{
+	if (Value != 0.0f)
+	{
+		// add movement in that direction
+		RightAxis = Value;
+		AddMovementInput(GetActorRightVector(), Value);
+	
+	}
+}
+
+void ASUNCharacter::TurnAtRate(float Rate)
+{
+	// calculate delta for this frame from the rate information
+	AddControllerYawInput(Rate * BaseTurnRate * GetWorld()->GetDeltaSeconds());
+}
+
+void ASUNCharacter::LookUpAtRate(float Rate)
+{
+	// calculate delta for this frame from the rate information
+	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
 }
 
 void ASUNCharacter::StartFire()
@@ -157,10 +198,15 @@ void ASUNCharacter::EndFire()
 
 void ASUNCharacter::DoubleJump()
 {
+	bool isFalling = GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling;
 	if(NumJumps < MaxJumps)
 	{
-		ACharacter::LaunchCharacter(FVector(0,0,JumpHeight), false, true);
-		NumJumps++;
+		if(!IsWallRunning)
+		{
+			ACharacter::LaunchCharacter(FVector(0,0,JumpHeight), false, true);
+			NumJumps++;
+			if(isFalling) NumJumps++;
+		}
 	}
 }
 
@@ -193,48 +239,96 @@ void ASUNCharacter::StopDash()
 	GetCharacterMovement()->StopMovementImmediately();
 }
 
+
+UFUNCTION()
+void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+{
+	if(!IsWallRunning)
+	{
+		if(CanSurfaceBeRan(Hit.ImpactNormal))
+		{
+			if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
+			{
+				FindDirectionAndSide(Hit.ImpactNormal);
+				if(ForwardAxis > 0.1f)
+				{
+
+				}
+			}
+		}
+	}
+}
+	
+
 void ASUNCharacter::WallRun()
 {
 
 }
 
-void ASUNCharacter::OnOverlapBegin(class UPrimitiveComponent* newComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+void ASUNCharacter::BeginWallRun()
+{
+
+}
+void ASUNCharacter::EndWallRun()
 {
 
 }
 
-void ASUNCharacter::OnOverlapEnd(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+
+bool ASUNCharacter::OnWall()
 {
-	
+	return false;
 }
-void ASUNCharacter::MoveForward(float Value)
+
+bool ASUNCharacter::MovingForward()
 {
-	if (Value != 0.0f)
+	return false;
+}
+
+void ASUNCharacter::TiltCamera()
+{
+
+}
+
+void ASUNCharacter::FindDirectionAndSide(FVector WallNormal) 
+{
+	float DotProduct = FVector::DotProduct(WallNormal, GetActorRightVector());
+	FVector Direction;
+	if(DotProduct > 0)
 	{
-		// add movement in that direction
-		AddMovementInput(GetActorForwardVector(), Value);
+		WallRunSide = Right;
+		Direction = FVector(0,0,1);
 	}
-}
-
-void ASUNCharacter::MoveRight(float Value)
-{
-	if (Value != 0.0f)
+	else
 	{
-		// add movement in that direction
-		AddMovementInput(GetActorRightVector(), Value);
+		WallRunSide = Left;
+		Direction = FVector(0,0,-1);
 	}
+	WallRunDirection = FVector::CrossProduct(WallNormal,Direction);
+}
+bool ASUNCharacter::CanSurfaceBeRan(FVector SurfaceNormal) const
+{
+    if(SurfaceNormal.Z < -.05)
+	{
+		FVector Surface = FVector (SurfaceNormal.X, SurfaceNormal.Y, 0);
+		Surface.GetSafeNormal();
+		Surface.Normalize();
+		if(UKismetMathLibrary::DegAcos(FVector::DotProduct(Surface, SurfaceNormal)) < GetCharacterMovement()->GetWalkableFloorAngle())
+		{
+			return false;
+		}
+		return true;
+	}
+	return false;
+}
+void ASUNCharacter::SetHorizontalVelocity()
+{
+
+}
+void ASUNCharacter::ClampHorizontalVelocity()
+{
+
 }
 
-void ASUNCharacter::TurnAtRate(float Rate)
-{
-	// calculate delta for this frame from the rate information
-	AddControllerYawInput(Rate * BaseTurnRate * GetWorld()->GetDeltaSeconds());
-}
-
-void ASUNCharacter::LookUpAtRate(float Rate)
-{
-	// calculate delta for this frame from the rate information
-	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
-}
 
 
