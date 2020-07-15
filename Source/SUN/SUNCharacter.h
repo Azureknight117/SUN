@@ -127,7 +127,7 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float JumpHeight = 500.f;
-	void ResetJumps(int Jumps);
+	void SetJumps(int Jumps);
 
 	//Wall run
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
@@ -136,16 +136,12 @@ public:
 	FVector WallRunDirection;
 	FTimerHandle WallRunTimer;
 	EWallRunSide WallRunSide;
+	FTimerHandle CameraTiltTimer;
 	void WallRun();
 	void BeginWallRun();
 	void EndWallRun(EWallRunEndReason Reason);
-	void TiltCamera();
-	bool OnWall();
-	bool MovingForward();
 	void FindDirectionAndSide(FVector WallNormal);
 	bool CanSurfaceBeRan(FVector SurfaceNormal) const;
-	void SetHorizontalVelocity();
-	void ClampHorizontalVelocity();
 
 	//Dash
 	void Dash();

@@ -47,10 +47,9 @@ ASUNCharacter::ASUNCharacter()
 
 	// Create a gun mesh component
 	FP_Gun = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FP_Gun"));
-	FP_Gun->SetOnlyOwnerSee(true);			// only the owning player will see this mesh
+	FP_Gun->SetOnlyOwnerSee(true);			
 	FP_Gun->bCastDynamicShadow = false;
 	FP_Gun->CastShadow = false;
-	// FP_Gun->SetupAttachment(Mesh1P, TEXT("GripPoint"));
 	FP_Gun->SetupAttachment(RootComponent);
 
 	FP_MuzzleLocation = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzleLocation"));
@@ -60,9 +59,10 @@ ASUNCharacter::ASUNCharacter()
 	// Default offset from the character location for projectiles to spawn
 	GunOffset = FVector(100.0f, 0.0f, 10.0f);
 
-	TriggerCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Trigger Capsule"));
-	TriggerCapsule->InitCapsuleSize(55.5, 96.f);
-	TriggerCapsule->SetCollisionProfileName(TEXT("Trigger"));
+	//Collision For Wall Run
+	TriggerCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("TriggerCapsule"));
+	TriggerCapsule->InitCapsuleSize(56.f, 96.0f);
+	TriggerCapsule->SetCollisionProfileName(TEXT("Pawn"));
 	TriggerCapsule->SetupAttachment(RootComponent);
 
 }
@@ -153,6 +153,7 @@ void ASUNCharacter::StartFire()
 	GetWorldTimerManager().SetTimer(ShotTimer,this,&ASUNCharacter::FireShot,WeaponFireRate,true);
 }
 
+//Loops for automatic rifle
 void ASUNCharacter::FireShot()
 {
 	FHitResult Hit;
@@ -164,7 +165,7 @@ void ASUNCharacter::FireShot()
 	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WeaponTrace),false,this);
 	if(GetWorld()->LineTraceSingleByChannel(Hit, StartTrace,EndTrace, ECC_Visibility,QueryParams))
 	{
-		//UE_LOG(LogTemp, Warning, TEXT("%s"), Hit.GetActor()->GetName())
+		//TODO Damage on Hit
 	}
 
 	DrawDebugLine(GetWorld(),StartTrace, EndTrace, FColor::White, false, 1.0f, 0, 1.0f);
@@ -192,6 +193,7 @@ void ASUNCharacter::EndFire()
 	GetWorldTimerManager().ClearTimer(ShotTimer);
 }
 
+//Double Jump
 void ASUNCharacter::DoubleJump()
 {
 	bool isFalling = GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling;
@@ -206,22 +208,31 @@ void ASUNCharacter::DoubleJump()
 		else
 		{
 			EndWallRun(JumpedOffWall);
-			ACharacter::LaunchCharacter(FVector(0,0,JumpHeight), false, true);
+			if(WallRunSide == Left) //Slightly offset when jumping off a wall to jump away from it
+			{
+				ACharacter::LaunchCharacter(FVector(0,20,JumpHeight), false, true);
+			}
+			else
+			{
+				ACharacter::LaunchCharacter(FVector(0,-20,JumpHeight), false, true);
+			}
+			SetJumps(0);
 			NumJumps++;
 		}
 	}
 }
 
-void ASUNCharacter::ResetJumps(int Jumps)
+void ASUNCharacter::SetJumps(int Jumps)
 {
 	NumJumps = Jumps;
 }
 
 void ASUNCharacter::Landed(const FHitResult & Hit)
 {
-	ResetJumps(0);
+	SetJumps(0);
 }
 
+//Dash in Direction of player's movement
 void ASUNCharacter::Dash()
 {
 	if(CanDash)
@@ -246,6 +257,7 @@ void ASUNCharacter::StopDash()
 	GetCharacterMovement()->StopMovementImmediately();
 }
 
+//On collision with wall, check if can wall run
 void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	if(!IsWallRunning)
@@ -255,17 +267,13 @@ void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 			if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
 			{
 				FindDirectionAndSide(Hit.ImpactNormal);
-				//if(ForwardAxis > 0.1f)
-				//{
-
-					BeginWallRun();
-				//}
+				BeginWallRun();
 			}
 		}
 	}
 }
 	
-
+//Fires a raycast, so long as the raycast is hitting a wall it keeps the player wall running
 void ASUNCharacter::WallRun()
 {
 	FVector WallSide;
@@ -286,7 +294,7 @@ void ASUNCharacter::WallRun()
 			break;
 	}
 
-	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 200) ;
+	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 300) ;
 	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WallTrace),false,this);
 	EWallRunSide PrevSide;
 	DrawDebugLine(GetWorld(), GetActorLocation(),(GetActorLocation() + ToWall), FColor::Purple, false, 1, 0, 1);
@@ -313,42 +321,26 @@ void ASUNCharacter::WallRun()
 
 }
 
+//Turn off gravity and contrain player to singular air movment for wall run
 void ASUNCharacter::BeginWallRun()
 {
 	GetCharacterMovement()->AirControl = 1.0f;
 	GetCharacterMovement()->GravityScale = 0;
 	GetCharacterMovement()->SetPlaneConstraintNormal(FVector(0,0,1));
 	IsWallRunning = true;
-	TiltCamera();
-	GetWorldTimerManager().SetTimer(WallRunTimer, this, &ASUNCharacter::WallRun, .01f, true);
+	GetWorldTimerManager().SetTimer(WallRunTimer, this, &ASUNCharacter::WallRun, .1f, true);
 }
 
 void ASUNCharacter::EndWallRun(EWallRunEndReason Reason)
 {
-	GetWorldTimerManager().ClearTimer(WallRunTimer);
 	GetCharacterMovement()->AirControl = 0.5f;
 	GetCharacterMovement()->GravityScale = 0.9f;
 	GetCharacterMovement()->SetPlaneConstraintNormal(FVector(0,0,0));
 	IsWallRunning = false;
-	TiltCamera();
+	GetWorldTimerManager().ClearTimer(WallRunTimer);
 }
 
-
-bool ASUNCharacter::OnWall()
-{
-	return false;
-}
-
-bool ASUNCharacter::MovingForward()
-{
-	return false;
-}
-
-void ASUNCharacter::TiltCamera()
-{
-
-}
-
+//Finds the side of the player the wall is on and the direction the player will travel
 void ASUNCharacter::FindDirectionAndSide(FVector WallNormal) 
 {
 	FVector2D WallNorm = FVector2D(WallNormal.X, WallNormal.Y);
@@ -368,6 +360,8 @@ void ASUNCharacter::FindDirectionAndSide(FVector WallNormal)
 		WallRunDirection = FVector::CrossProduct(WallNormal,Direction);
 	}
 }
+
+//Checks if the surface is wall runable (Not too flat or to steep)
 bool ASUNCharacter::CanSurfaceBeRan(FVector SurfaceNormal) const
 {
     if(SurfaceNormal.Z < 0)
@@ -384,14 +378,3 @@ bool ASUNCharacter::CanSurfaceBeRan(FVector SurfaceNormal) const
 	}
 	return false;
 }
-void ASUNCharacter::SetHorizontalVelocity()
-{
-
-}
-void ASUNCharacter::ClampHorizontalVelocity()
-{
-
-}
-
-
-
