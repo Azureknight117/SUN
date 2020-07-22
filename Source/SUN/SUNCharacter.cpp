@@ -15,7 +15,8 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Math/Vector.h"
 
-
+#define LEFT -90
+#define RIGHT 90
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
 //////////////////////////////////////////////////////////////////////////
@@ -83,13 +84,9 @@ void ASUNCharacter::BeginPlay()
 	{
 		MaxJumps = 1;
 	}
-	TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
+	//TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
 }
 
-void ASUNCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-}
 
 void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
@@ -258,22 +255,60 @@ void ASUNCharacter::StopDash()
 	GetCharacterMovement()->StopMovementImmediately();
 }
 
-//On collision with wall, check if can wall run
-void ASUNCharacter::OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+void ASUNCharacter::Tick(float DeltaTime)
 {
-	if(!IsWallRunning)
+	Super::Tick(DeltaTime);
+
+	if (GetCharacterMovement()->IsFalling())
 	{
-		if(CanSurfaceBeRan(Hit.ImpactNormal))
+		FHitResult HitResultForward;
+		FHitResult HitResultLeft;
+		FHitResult HitResulRight;
+		FHitResult Hit;
+		FCollisionQueryParams TraceParams = FCollisionQueryParams(FName(TEXT("Trace")), true, this);
+
+		ECollisionChannel Channel = ECC_WorldStatic;
+
+		FVector Start = GetActorLocation();
+		FVector End = GetActorRightVector() * PlayerToWallDistance;
+		FVector ForwardEnd = GetActorForwardVector() * PlayerToWallDistance;
+		
+		if (GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + -End, Channel, TraceParams))
 		{
-			if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
+			if(!IsWallRunning)
 			{
-				FindDirectionAndSide(Hit.ImpactNormal);
-				BeginWallRun();
+			
+			if(CanSurfaceBeRan(Hit.ImpactNormal))
+			{
+
+				if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
+				{
+					FindDirectionAndSide(Hit.ImpactNormal);
+					WallRunSide = Left;
+					BeginWallRun();
+				}
+			}
+			}
+		}
+		else if (GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + End, Channel, TraceParams))
+		{
+			if(!IsWallRunning)
+			{
+
+			if(CanSurfaceBeRan(Hit.ImpactNormal))
+			{
+				if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
+				{
+					FindDirectionAndSide(Hit.ImpactNormal);
+					WallRunSide = Right;
+					BeginWallRun();
+				}
+			}
 			}
 		}
 	}
 }
-	
+
 //Fires a raycast, so long as the raycast is hitting a wall it keeps the player wall running
 void ASUNCharacter::WallRun()
 {
@@ -295,14 +330,13 @@ void ASUNCharacter::WallRun()
 			break;
 	}
 
-	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 300) ;
+	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 100) ;
 	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WallTrace),false,this);
 	EWallRunSide PrevSide;
 	if(GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(),(GetActorLocation() + ToWall), ECC_Visibility,QueryParams))
 	{
 		PrevSide = WallRunSide;
 		FindDirectionAndSide(Hit.ImpactNormal);
-		GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, FString::Printf(TEXT("WALL")));
 		DrawDebugLine(GetWorld(), GetActorLocation(), (GetActorLocation() + ToWall), FColor::Green, true);
 		if(PrevSide != WallRunSide)
 		{
@@ -366,7 +400,7 @@ void ASUNCharacter::FindDirectionAndSide(FVector WallNormal)
 //Checks if the surface is wall runable (Not too flat or to steep)
 bool ASUNCharacter::CanSurfaceBeRan(FVector SurfaceNormal) const
 {
-    if(SurfaceNormal.Z < 0)
+    if(SurfaceNormal.Z < -0.05)
 	{
 		return false;
 	}

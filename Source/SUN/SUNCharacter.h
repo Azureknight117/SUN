@@ -79,10 +79,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Gameplay)
 	class UAnimMontage* FireAnimation;
 
-	UFUNCTION(BlueprintCallable)
-	void OnCompHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
-	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WallRun)
+	float WallRunSpeed = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WallRun)
+	float PlayerToWallDistance = 75;
+	void AttachToWall(int Direction, float WallSpeed, FHitResult HitResult);
 protected:
 	
 	/** Fires a projectile. */
