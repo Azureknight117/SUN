@@ -63,6 +63,7 @@ ASUNCharacter::ASUNCharacter()
 	TriggerCapsule = CreateDefaultSubobject<UCapsuleComponent>(TEXT("TriggerCapsule"));
 	TriggerCapsule->InitCapsuleSize(56.f, 96.0f);
 	TriggerCapsule->SetCollisionProfileName(TEXT("Pawn"));
+	//TriggerCapsule->SetNotifyRigidBodyCollision("true");
 	TriggerCapsule->SetupAttachment(RootComponent);
 
 }
@@ -297,11 +298,12 @@ void ASUNCharacter::WallRun()
 	FVector ToWall = (FVector::CrossProduct(WallRunDirection, WallSide ) * 300) ;
 	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WallTrace),false,this);
 	EWallRunSide PrevSide;
-	DrawDebugLine(GetWorld(), GetActorLocation(),(GetActorLocation() + ToWall), FColor::Purple, false, 1, 0, 1);
 	if(GetWorld()->LineTraceSingleByChannel(Hit, GetActorLocation(),(GetActorLocation() + ToWall), ECC_Visibility,QueryParams))
 	{
 		PrevSide = WallRunSide;
 		FindDirectionAndSide(Hit.ImpactNormal);
+		GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, FString::Printf(TEXT("WALL")));
+		DrawDebugLine(GetWorld(), GetActorLocation(), (GetActorLocation() + ToWall), FColor::Green, true);
 		if(PrevSide != WallRunSide)
 		{
 			EndWallRun(FallOffWall);
