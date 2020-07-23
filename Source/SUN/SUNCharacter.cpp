@@ -46,12 +46,20 @@ ASUNCharacter::ASUNCharacter()
 	Mesh1P->SetRelativeRotation(FRotator(1.9f, -19.19f, 5.2f));
 	Mesh1P->SetRelativeLocation(FVector(-0.5f, -4.4f, -155.7f));
 
+
 	// Create a gun mesh component
 	FP_Gun = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FP_Gun"));
 	FP_Gun->SetOnlyOwnerSee(true);			
 	FP_Gun->bCastDynamicShadow = false;
 	FP_Gun->CastShadow = false;
 	FP_Gun->SetupAttachment(RootComponent);
+
+	FP_Sword = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FP_Katana"));
+	FP_Sword->SetOnlyOwnerSee(true);			
+	FP_Sword->bCastDynamicShadow = false;
+	FP_Sword->CastShadow = false;
+	FP_Sword->SetupAttachment(RootComponent);
+	FP_Sword->SetRelativeScale3D(FVector(10, 10, 10));
 
 	FP_MuzzleLocation = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzleLocation"));
 	FP_MuzzleLocation->SetupAttachment(FP_Gun);
@@ -84,6 +92,7 @@ void ASUNCharacter::BeginPlay()
 	{
 		MaxJumps = 1;
 	}
+	WeaponMode = GUN;
 	//TriggerCapsule ->OnComponentHit.AddDynamic(this, &ASUNCharacter::OnCompHit);
 }
 
@@ -97,10 +106,10 @@ void ASUNCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASUNCharacter::DoubleJump);
 	PlayerInputComponent->BindAction("Dash", IE_Pressed, this, &ASUNCharacter::Dash);
 
-	// Bind fire event
-	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ASUNCharacter::StartFire);
-	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ASUNCharacter::EndFire);
-
+	// Bind Attack events
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ASUNCharacter::StartAttack);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ASUNCharacter::EndAttack);
+	PlayerInputComponent->BindAction("SwitchMode", IE_Pressed, this, &ASUNCharacter::SwitchWeaponMode);
 
 	// Bind movement events
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASUNCharacter::MoveForward);
@@ -144,6 +153,41 @@ void ASUNCharacter::LookUpAtRate(float Rate)
 	// calculate delta for this frame from the rate information
 	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
 }
+
+void ASUNCharacter::SwitchWeaponMode()
+{
+	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, FString::Printf(TEXT("MODE CHANGE")));
+}
+
+void ASUNCharacter::StartAttack()
+{
+	if(WeaponMode == GUN)
+	{
+		StartFire();
+		return;
+	}
+	else if(WeaponMode == MELEE)
+	{
+		StartMelee();
+		return;
+	}
+}
+
+void ASUNCharacter::EndAttack()
+{
+	if(WeaponMode == GUN)
+	{
+		EndFire();
+		return;
+	}
+	else if(WeaponMode == MELEE)
+	{
+		EndMelee();
+		return;
+	}
+}
+
+
 
 void ASUNCharacter::StartFire()
 {
@@ -191,6 +235,12 @@ void ASUNCharacter::EndFire()
 	GetWorldTimerManager().ClearTimer(ShotTimer);
 }
 
+void ASUNCharacter::StartMelee()
+{}
+void ASUNCharacter::Melee()
+{}
+void ASUNCharacter::EndMelee()
+{}
 //Double Jump
 void ASUNCharacter::DoubleJump()
 {
@@ -281,12 +331,9 @@ void ASUNCharacter::Tick(float DeltaTime)
 			if(CanSurfaceBeRan(Hit.ImpactNormal))
 			{
 
-				if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
-				{
-					FindDirectionAndSide(Hit.ImpactNormal);
-					WallRunSide = Left;
-					BeginWallRun();
-				}
+				FindDirectionAndSide(Hit.ImpactNormal);
+				WallRunSide = Left;
+				BeginWallRun();
 			}
 			}
 		}
@@ -297,12 +344,9 @@ void ASUNCharacter::Tick(float DeltaTime)
 
 			if(CanSurfaceBeRan(Hit.ImpactNormal))
 			{
-				if(GetCharacterMovement()->MovementMode==EMovementMode::MOVE_Falling)
-				{
-					FindDirectionAndSide(Hit.ImpactNormal);
-					WallRunSide = Right;
-					BeginWallRun();
-				}
+				FindDirectionAndSide(Hit.ImpactNormal);
+				WallRunSide = Right;
+				BeginWallRun();
 			}
 			}
 		}
@@ -314,12 +358,6 @@ void ASUNCharacter::WallRun()
 {
 	FVector WallSide;
 	FHitResult Hit;
-	if(ForwardAxis < 0.1f)
-	{
-		EndWallRun(FallOffWall);
-		return;
-	}
-
 	switch(WallRunSide)
 	{
 		case Left:

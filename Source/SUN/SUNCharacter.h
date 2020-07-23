@@ -16,10 +16,18 @@ enum EWallRunSide
 	Right
 };
 
+UENUM()
 enum EWallRunEndReason
 {
 	FallOffWall,
 	JumpedOffWall
+};
+
+UENUM()
+enum EWeaponMode
+{
+	GUN,
+	MELEE
 };
 
 UCLASS(config=Game)
@@ -35,6 +43,9 @@ class ASUNCharacter : public ACharacter
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USkeletalMeshComponent* FP_Gun;
 
+	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
+	class USkeletalMeshComponent* FP_Sword;
+
 	/** Location on gun mesh where projectiles should spawn. */
 	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USceneComponent* FP_MuzzleLocation;
@@ -45,8 +56,6 @@ class ASUNCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Trigger Capsule")
 	class UCapsuleComponent* TriggerCapsule;
-
-
 
 
 public:
@@ -85,14 +94,22 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WallRun)
 	float PlayerToWallDistance = 75;
-	void AttachToWall(int Direction, float WallSpeed, FHitResult HitResult);
+
 protected:
 	
-	/** Fires a projectile. */
+	
+	void StartAttack();
+	void EndAttack();
 
+	//Gun Mode attack
 	void StartFire();
 	void EndFire();
 	void FireShot();
+
+	//Melee mode attack
+	void StartMelee();
+	void EndMelee();
+	void Melee();
 
 	FTimerHandle ShotTimer;
 
@@ -107,6 +124,7 @@ protected:
 	void TurnAtRate(float Rate);
 
 	void LookUpAtRate(float Rate);
+
 
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
@@ -155,5 +173,8 @@ public:
 	FTimerHandle DashTimer;
 	void StopDash();
 
+	//Weapon Modes: Gun and Melee
+	EWeaponMode WeaponMode;
+	void SwitchWeaponMode();
 };
 
