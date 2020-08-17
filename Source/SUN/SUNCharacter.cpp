@@ -75,6 +75,7 @@ ASUNCharacter::ASUNCharacter()
 	//TriggerCapsule->SetNotifyRigidBodyCollision("true");
 	TriggerCapsule->SetupAttachment(RootComponent);
 
+	Health = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 }
 
 void ASUNCharacter::BeginPlay()
@@ -207,7 +208,8 @@ void ASUNCharacter::FireShot()
 	FCollisionQueryParams QueryParams = FCollisionQueryParams(SCENE_QUERY_STAT(WeaponTrace),false,this);
 	if(GetWorld()->LineTraceSingleByChannel(Hit, StartTrace,EndTrace, ECC_Visibility,QueryParams))
 	{
-		//TODO Damage on Hit
+		AActor* HitActor = Hit.GetActor();
+		UGameplayStatics::ApplyPointDamage(HitActor, 20.f, GetActorLocation(), Hit, nullptr, this, DamageType);
 	}
 
 	DrawDebugLine(GetWorld(),StartTrace, EndTrace, FColor::White, false, 1.0f, 0, 1.0f);

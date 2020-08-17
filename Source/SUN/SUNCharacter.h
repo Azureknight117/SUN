@@ -5,10 +5,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "TimerManager.h"
+#include "HealthComponent.h"
 #include "Components/ActorComponent.h"
 #include "SUNCharacter.generated.h"
 
 class UInputComponent;
+class UDamageType;
 UENUM()
 enum EWallRunSide
 {
@@ -56,6 +58,9 @@ class ASUNCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Trigger Capsule")
 	class UCapsuleComponent* TriggerCapsule;
+
+	UPROPERTY(EditAnywhere, Category = Health)
+	class UHealthComponent* Health;
 
 
 public:
@@ -176,5 +181,7 @@ public:
 	//Weapon Modes: Gun and Melee
 	EWeaponMode WeaponMode;
 	void SwitchWeaponMode();
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "DamageType");
+	TSubclassOf<UDamageType> DamageType;
 };
 
